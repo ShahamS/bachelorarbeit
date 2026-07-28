@@ -1,0 +1,2 @@
+total_events,matches,mismatches,fitness,sum_step_loss,avg_step_loss,max_step_loss,exact_count,exact_pct,unknown_node,invalid_predecessor,total_route,total_remote,total_queried,requests_per_event,nodes,activities,matrix_entries,final_states,max_node_matrix_entries,training_time_s,checking_time_s,elapsed_s,avg_event_time_ms,total_compute
+2753,2744,9,0.9967308390846349,9,0.0032691609153650564,1,2744,0.9967308390846349,1,8,2753,0,2753,1.0,25,41,242,242,35,0.008274100022390485,0.0057911998592317104,0.014065299881622195,0.002103596025874214,2753
