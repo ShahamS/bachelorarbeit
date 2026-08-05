@@ -10,7 +10,7 @@ from .event_log import EventLog
 
 class Converter:
     #Übersetzt externe Event-Logs in die interne CheckMyFlow-Struktur
-    def to_event_log(self, event_log, location_key=None, skip_events_without_location=True):
+    def to_event_log(self, event_log, location_key=None, skip_events_without_location=False):
         '''Konvertiert einen PM4Py EventLog in einen lokalen `EventLog`.
         `location_key` bestimmt, welches Attribut eines PM4Py-Events als
         verteilter Knoten verwendet wird, z.B. `org:group`, `org:resource` oder
@@ -30,7 +30,7 @@ class Converter:
 
     def to_event(self, pm4py_event, case_id, location_key=None):
         '''Konvertiert ein einzelnes PM4Py-Event.'''
-        location = self._read_optional_value(pm4py_event, location_key, default="")
+        location = self._read_optional_value(pm4py_event, location_key, default="UNKNOWN")
         return Event(
             case_id=case_id,
             activity=str(pm4py_event["concept:name"]),

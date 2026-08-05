@@ -15,11 +15,11 @@ CHECKMYFLOW_ROOT = REPO_ROOT / "CheckMyFlow_DisCC"
 DEFAULT_DATASET = (
     REPO_ROOT
     / "datasets"
-    / "SepsisCasesEventLog_1_all"
-    / "Sepsis Cases - Event Log.xes"
-    / "Sepsis Cases - Event Log.xes"
+    / "Real-life event logs - Hospital log_1_all"
+    / "Hospital_log.xes"
+    / "Hospital_log.xes"
 )
-DEFAULT_OUTPUT = REPO_ROOT / "evaluation" / "results" / "checkmyflow" / "sepsis_training_splits.csv"
+DEFAULT_OUTPUT = REPO_ROOT / "evaluation" / "results" / "checkmyflow" / "hospital_training_splits.csv"
 
 
 if str(CHECKMYFLOW_ROOT) not in sys.path:
@@ -40,7 +40,7 @@ def parse_args():
     )
     parser.add_argument(
         "--location-key",
-        default="org:group",
+        default="org:group", # Wenn Road Traffic, dann resource, bei den anderen beiden group 
         help="Event-Attribut, das als Node verwendet wird.",
     )
     parser.add_argument(
@@ -69,12 +69,40 @@ def main():
     dataset_path = Path(args.dataset)
     output_path = Path(args.output)
 
+    initial_splitter = EventLogSplitter(
+        file_path=str(dataset_path),
+        training_split=args.training_splits[0],
+        location_key=args.location_key,
+        random_seed=args.random_seed,
+    )
+
+    full_log = initial_splitter.log
+
+    # Genau einmal für das vollständig konvertierte Dataset berechnen
+    total_input_events = sum(
+        len(events)
+        for _, events in full_log.iter_traces()
+    )
+
+    unknown_location_events = sum(
+        1
+        for _, events in full_log.iter_traces()
+        for event in events
+        if event.location == "UNKNOWN"
+    )
+
+    unknown_location_pct = (
+        unknown_location_events / total_input_events
+        if total_input_events
+        else 0.0
+    )
+
     rows = []
     for training_split in args.training_splits:
         print(f"Running CheckMyFlow split={training_split}")
         # Erzeuge EventLogs mit interner Struktur und splitte sie in Trainings- und Testdaten
         splitter = EventLogSplitter(
-            file_path=str(dataset_path),
+            event_log=full_log,
             training_split=training_split,
             location_key=args.location_key,
             random_seed=args.random_seed,
@@ -91,6 +119,9 @@ def main():
             "location_key": args.location_key,
             "training_traces": len(training_log),
             "test_traces": len(test_log),
+            "input_events": total_input_events,
+            "unknown_location_events": unknown_location_events,
+            "unknown_location_pct": unknown_location_pct,
         }
         row.update(summary.to_dict())
         rows.append(row)

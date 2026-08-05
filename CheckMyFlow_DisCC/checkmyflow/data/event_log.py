@@ -21,14 +21,13 @@ class EventLog:
         return True in [event.activity == activity for event in self.traces[case_id]]
 
     def filter_case_ids(self, case_ids):
-            # Erzeuge ein neues Eventlog mit ausgewählten Case IDs
-            new_event_log = EventLog()
-            for case_id in self.traces:
-                if case_id in case_ids:
-                    for event in self.traces[case_id]:
-                        new_event_log.add_event(event)
-            return new_event_log
-
+        # Erzeuge ein neues Eventlog mit ausgewählten Case IDs
+        return EventLog(
+            {
+                case_id: self.traces[case_id] for case_id in case_ids if case_id in self.traces
+            }
+        )    
+    
     def case_ids(self):
         # Gibt alle Case-IDs in Einfüge-Reihenfolge zurück
         return list(self.traces.keys())
