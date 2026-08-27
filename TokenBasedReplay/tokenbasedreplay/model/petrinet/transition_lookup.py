@@ -1,5 +1,5 @@
 '''
-Klasse zur Bereitstellung von Zugriffsmethoden auf ein entdecktes Petri-Netz
+Klasse zur Bereitstellung von Zugriffsmethoden auf ein Petri-Netz
 bzgl. der Transitionen
 '''
 class TransitionLookup:

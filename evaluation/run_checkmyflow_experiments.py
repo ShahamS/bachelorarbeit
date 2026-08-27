@@ -1,8 +1,9 @@
-"""Führt reproduzierbare CheckMyFlow-Experimente aus.
+'''Führt reproduzierbare CheckMyFlow-Experimente aus.
 Das Skript erzeugt eine gemeinsame CSV-Datei für mehrere Trainings-Splits.
 Diese Tabelle ist als Gegenstück zu den CSV-Ausgaben der
 `distributed-alignments`-Evaluation gedacht.
-"""
+'''
+
 
 import argparse
 import csv
@@ -40,7 +41,7 @@ def parse_args():
     )
     parser.add_argument(
         "--location-key",
-        default="org:group", # Wenn Road Traffic, dann resource, bei den anderen beiden group 
+        default=None,
         help="Event-Attribut, das als Node verwendet wird.",
     )
     parser.add_argument(
@@ -69,40 +70,12 @@ def main():
     dataset_path = Path(args.dataset)
     output_path = Path(args.output)
 
-    initial_splitter = EventLogSplitter(
-        file_path=str(dataset_path),
-        training_split=args.training_splits[0],
-        location_key=args.location_key,
-        random_seed=args.random_seed,
-    )
-
-    full_log = initial_splitter.log
-
-    # Genau einmal für das vollständig konvertierte Dataset berechnen
-    total_input_events = sum(
-        len(events)
-        for _, events in full_log.iter_traces()
-    )
-
-    unknown_location_events = sum(
-        1
-        for _, events in full_log.iter_traces()
-        for event in events
-        if event.location == "UNKNOWN"
-    )
-
-    unknown_location_pct = (
-        unknown_location_events / total_input_events
-        if total_input_events
-        else 0.0
-    )
-
     rows = []
     for training_split in args.training_splits:
         print(f"Running CheckMyFlow split={training_split}")
         # Erzeuge EventLogs mit interner Struktur und splitte sie in Trainings- und Testdaten
         splitter = EventLogSplitter(
-            event_log=full_log,
+            file_path=str(dataset_path),
             training_split=training_split,
             location_key=args.location_key,
             random_seed=args.random_seed,
@@ -119,9 +92,6 @@ def main():
             "location_key": args.location_key,
             "training_traces": len(training_log),
             "test_traces": len(test_log),
-            "input_events": total_input_events,
-            "unknown_location_events": unknown_location_events,
-            "unknown_location_pct": unknown_location_pct,
         }
         row.update(summary.to_dict())
         rows.append(row)
