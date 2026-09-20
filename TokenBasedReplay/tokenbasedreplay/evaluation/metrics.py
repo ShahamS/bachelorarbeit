@@ -1,12 +1,7 @@
-"""Evaluation API fuer zentrale und dezentrale Token-Based-Replay-Laeufe."""
-
-import csv
 import json
 import time
-from pathlib import Path
 
 from tokenbasedreplay.data.converter import Converter
-from tokenbasedreplay.model.central.central_replayer import CentralTokenReplayer
 from tokenbasedreplay.model.distributed.assignment import ParticipantAssignment
 from tokenbasedreplay.model.distributed.distributed_replayer import DistributedTokenReplayer
 from tokenbasedreplay.model.distributed.network import NetworkSimulator
@@ -14,8 +9,6 @@ from tokenbasedreplay.model.petrinet.discoverer import DiscoveryRunner
 
 
 class TokenReplayEvaluationSummary:
-    """Sammelt die Kennzahlen eines Token-Replay-Laufs."""
-
     def __init__(self, metrics, replay_result=None, discovered_model=None):
         self.metrics = metrics
         self.replay_result = replay_result
@@ -24,78 +17,20 @@ class TokenReplayEvaluationSummary:
     def to_dict(self):
         return dict(self.metrics)
 
-    def write_csv(self, file_path):
-        output_path = Path(file_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames=list(self.metrics.keys()))
-            writer.writeheader()
-            writer.writerow(self.metrics)
-
-    def write_json(self, file_path):
-        output_path = Path(file_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_path, "w", encoding="utf-8") as json_file:
-            json.dump(self.metrics, json_file, indent=2)
-
-
-def evaluate_central_token_replay(
-    training_log,
-    test_log,
-    discovery_algorithm="inductive",
-    heuristic_threshold=None,
-):
-    """Entdeckt ein Petri-Netz und evaluiert zentrales Token-Based Replay."""
-
-    converter = Converter()
-    discovery_start = time.perf_counter()
-    pm4py_training_log = converter.from_event_log(training_log)
-    discovered_model = _discover_model(
-        pm4py_training_log,
-        discovery_algorithm,
-        heuristic_threshold,
-    )
-    discovery_time_s = time.perf_counter() - discovery_start
-
-    replay_start = time.perf_counter()
-    replay_result = CentralTokenReplayer(discovered_model).replay_log(test_log)
-    replay_time_s = time.perf_counter() - replay_start
-
-    metrics = {}
-    metrics.update(_run_metadata(discovered_model, discovery_algorithm))
-    metrics.update(_log_metrics(training_log, test_log))
-    metrics.update(_model_metrics(discovered_model))
-    metrics.update(_result_metrics(replay_result))
-    metrics.update(_network_metrics(replay_result))
-    metrics.update(_timing_metrics(discovery_time_s, replay_time_s, replay_result))
-
-    return TokenReplayEvaluationSummary(
-        metrics=metrics,
-        replay_result=replay_result,
-        discovered_model=discovered_model,
-    )
-
-
 def evaluate_distributed_token_replay(
     training_log,
     test_log,
     discovery_algorithm="alpha",
     heuristic_threshold=None,
 ):
-    # Entdeckt ein Petri-Netz und evaluiert dezentrales Token-Based Replay
-
     converter = Converter()
     discovery_start = time.perf_counter()
     pm4py_training_log = converter.from_event_log(training_log)
-    # Trainiere Model in Form eines Petri-Netz
-    discovered_model = _discover_model(
+    discovered_model = discover_model(
         pm4py_training_log,
         discovery_algorithm,
         heuristic_threshold,
     )
-    # Ordne Participants Bereichen des Petri-Netzes zu
     participants, activity_mapping, place_mapping = ParticipantAssignment(
         discovered_model,
         training_log,
@@ -104,20 +39,35 @@ def evaluate_distributed_token_replay(
 
     replay_start = time.perf_counter()
     network = NetworkSimulator(participants, activity_mapping, place_mapping)
-    # Starte dezentrales Token-Based Replay
     replay_result = DistributedTokenReplayer(
         discovered_model,
         participants,
         network,
     ).replay_log(test_log)
     replay_time_s = time.perf_counter() - replay_start
+    fitness_participants, fitness_activity_mapping, fitness_place_mapping = ParticipantAssignment(
+        discovered_model,
+        training_log,
+    ).build()
+    fitness_network = NetworkSimulator(
+        fitness_participants,
+        fitness_activity_mapping,
+        fitness_place_mapping,
+    )
+    fitness_result = DistributedTokenReplayer(
+        discovered_model,
+        fitness_participants,
+        fitness_network,
+    ).replay_log(training_log)
 
     metrics = {}
     metrics.update(_run_metadata(discovered_model, discovery_algorithm, "distributed"))
     metrics.update(_log_metrics(training_log, test_log))
     metrics.update(_model_metrics(discovered_model))
+    metrics.update(_activity_coverage_metrics(training_log, discovered_model))
     metrics.update(_participant_metrics(participants))
     metrics.update(_result_metrics(replay_result))
+    metrics.update(_quality_metrics(fitness_result, replay_result))
     metrics.update(_network_metrics(replay_result))
     metrics.update(_timing_metrics(discovery_time_s, replay_time_s, replay_result))
 
@@ -128,7 +78,7 @@ def evaluate_distributed_token_replay(
     )
 
 
-def _discover_model(pm4py_training_log, discovery_algorithm, heuristic_threshold):
+def discover_model(pm4py_training_log, discovery_algorithm, heuristic_threshold):
     discovery = DiscoveryRunner()
 
     if discovery_algorithm == "alpha":
@@ -142,7 +92,7 @@ def _discover_model(pm4py_training_log, discovery_algorithm, heuristic_threshold
     raise ValueError(f"Unbekannter Discovery-Algorithmus: {discovery_algorithm}")
 
 
-def _run_metadata(discovered_model, requested_algorithm, strategy="central"):
+def _run_metadata(discovered_model, requested_algorithm, strategy="distributed"):
     return {
         "method": "token_replay",
         "strategy": strategy,
@@ -166,6 +116,42 @@ def _model_metrics(discovered_model):
         "arcs": discovered_model.arcs_count(),
         "labeled_transitions": discovered_model.labeled_transitions_count(),
         "silent_transitions": discovered_model.silent_transitions_count(),
+    }
+
+
+def _activity_coverage_metrics(training_log, discovered_model):
+    training_activities = {
+        event.activity
+        for _, trace in training_log.iter_traces()
+        for event in trace
+    }
+    model_activities = {
+        transition.label
+        for transition in discovered_model.net.transitions
+        if transition.label is not None
+    }
+    common_activities = training_activities & model_activities
+    missing_training_activities = training_activities - model_activities
+    extra_model_activities = model_activities - training_activities
+
+    activity_coverage = 0.0
+    if training_activities:
+        activity_coverage = len(common_activities) / len(training_activities)
+
+    return {
+        "training_activities": len(training_activities),
+        "model_activities": len(model_activities),
+        "missing_training_activities": len(missing_training_activities),
+        "missing_training_activity_names": json.dumps(
+            sorted(missing_training_activities),
+            sort_keys=True,
+        ),
+        "extra_model_activities": len(extra_model_activities),
+        "extra_model_activity_names": json.dumps(
+            sorted(extra_model_activities),
+            sort_keys=True,
+        ),
+        "activity_coverage": activity_coverage,
     }
 
 
@@ -205,12 +191,21 @@ def _result_metrics(result):
         "produced_tokens": result.total_produced_tokens,
         "missing_tokens": result.total_missing_tokens,
         "remaining_tokens": result.total_remaining_tokens,
-        "fitness": result.fitness,
+        "generalization": result.generalization,
         "sum_step_loss": mismatches,
         "avg_step_loss": avg_step_loss,
         "max_step_loss": 1 if mismatches else 0,
         "exact_count": result.matched_events,
         "exact_pct": exact_pct,
+    }
+
+
+def _quality_metrics(fitness_result, generalization_result):
+    fitness = fitness_result.generalization
+    generalization = generalization_result.generalization
+    return {
+        "fitness": fitness,
+        "fitness_generalization_gap": fitness - generalization,
     }
 
 

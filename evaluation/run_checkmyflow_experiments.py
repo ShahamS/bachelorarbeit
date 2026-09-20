@@ -1,13 +1,7 @@
-'''Führt reproduzierbare CheckMyFlow-Experimente aus.
-Das Skript erzeugt eine gemeinsame CSV-Datei für mehrere Trainings-Splits.
-Diese Tabelle ist als Gegenstück zu den CSV-Ausgaben der
-`distributed-alignments`-Evaluation gedacht.
-'''
-
-
 import argparse
 import csv
 import sys
+import time
 from pathlib import Path
 
 
@@ -16,11 +10,11 @@ CHECKMYFLOW_ROOT = REPO_ROOT / "CheckMyFlow_DisCC"
 DEFAULT_DATASET = (
     REPO_ROOT
     / "datasets"
-    / "Real-life event logs - Hospital log_1_all"
-    / "Hospital_log.xes"
-    / "Hospital_log.xes"
+    / "artificial_log.xes"
+    #/ "Hospital_log.xes"
+    #/ "Hospital_log.xes"
 )
-DEFAULT_OUTPUT = REPO_ROOT / "evaluation" / "results" / "checkmyflow" / "hospital_training_splits.csv"
+DEFAULT_OUTPUT = REPO_ROOT / "evaluation" / "results" / "checkmyflow" / "artificial_training_splits.csv"
 
 
 if str(CHECKMYFLOW_ROOT) not in sys.path:
@@ -70,18 +64,37 @@ def main():
     dataset_path = Path(args.dataset)
     output_path = Path(args.output)
 
+    print(f"Loading dataset {dataset_path}", flush=True)
+    load_start = time.perf_counter()
+    base_splitter = EventLogSplitter(
+        file_path=str(dataset_path),
+        training_split=1.0,
+        location_key=args.location_key,
+        random_seed=args.random_seed,
+    )
+    base_log = base_splitter.log
+    print(
+        "Loaded "
+        f"{len(base_log)} traces / {event_count(base_log)} events "
+        f"in {time.perf_counter() - load_start:.2f}s",
+        flush=True,
+    )
+
     rows = []
     for training_split in args.training_splits:
-        print(f"Running CheckMyFlow split={training_split}")
-        # Erzeuge EventLogs mit interner Struktur und splitte sie in Trainings- und Testdaten
+        print(f"Preparing split={training_split}", flush=True)
         splitter = EventLogSplitter(
-            file_path=str(dataset_path),
+            event_log=base_log,
             training_split=training_split,
             location_key=args.location_key,
             random_seed=args.random_seed,
         )
         training_log, test_log = splitter.split()
-        # Führe CheckMyFlow aus und sammle die Ergebnisse
+        print(
+            f"Running CheckMyFlow split={training_split} "
+            f"training_traces={len(training_log)} test_traces={len(test_log)}",
+            flush=True,
+        )
         summary = evaluate_checkmyflow(training_log, test_log)
 
         row = {
@@ -103,6 +116,10 @@ def main():
         writer.writerows(rows)
 
     print(f"Wrote {output_path}")
+
+
+def event_count(event_log):
+    return sum(len(trace) for _, trace in event_log.iter_traces())
 
 
 if __name__ == "__main__":

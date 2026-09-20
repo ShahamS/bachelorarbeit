@@ -1,8 +1,6 @@
-'''
-Klasse zur Bereitstellung von Zugriffsmethoden auf ein entdecktes Petri-Netz
-'''
+from tokenbasedreplay.model.petrinet.discovered_model import DiscoveredPetriNet
 class PetriNetAccess:
-    def __init__(self, discovered_model):
+    def __init__(self, discovered_model: DiscoveredPetriNet):
         self.model = discovered_model
         self.net = discovered_model.net
 
@@ -17,9 +15,6 @@ class PetriNetAccess:
 
     def output_places(self, transition):
         return [arc.target for arc in transition.out_arcs]
-
-    def transition_label(self, transition):
-        return transition.label
 
     def is_silent(self, transition):
         return transition.label is None

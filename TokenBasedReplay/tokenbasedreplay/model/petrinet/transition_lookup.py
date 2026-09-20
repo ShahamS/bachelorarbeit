@@ -1,11 +1,8 @@
-'''
-Klasse zur Bereitstellung von Zugriffsmethoden auf ein Petri-Netz
-bzgl. der Transitionen
-'''
+from pm4py.discovery import PetriNet
 class TransitionLookup:
-    def __init__(self, net):
+    def __init__(self, net: PetriNet):
         self.net = net
-        self.transitions_by_label = self._index_labeled_transitions()
+        self.transitions_by_label = self.index_labeled_transitions()
 
     def find_transition(self, activity):
         transitions = self.transitions_by_label.get(activity, [])
@@ -23,7 +20,13 @@ class TransitionLookup:
             if len(transitions) > 1
         }
 
-    def _index_labeled_transitions(self):
+    def silent_transitions(self):
+        return sorted(
+            [transition for transition in self.net.transitions if transition.label is None],
+            key=lambda transition: str(transition.name),
+        )
+
+    def index_labeled_transitions(self):
         transitions_by_label = {}
         for transition in self.net.transitions:
             if transition.label is None:

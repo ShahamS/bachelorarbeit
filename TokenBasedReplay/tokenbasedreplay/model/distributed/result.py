@@ -1,7 +1,3 @@
-"""
-Ergebnisobjekte für verteiltes Token-Based Replay.
-"""
-
 from dataclasses import dataclass, field
 
 
@@ -57,22 +53,22 @@ class ReplayLogResult:
 
     @property
     def total_consumed_tokens(self):
-        return self._sum_participant_metric("consumed_tokens")
+        return self.sum_participant_metric("consumed_tokens")
 
     @property
     def total_produced_tokens(self):
-        return self._sum_participant_metric("produced_tokens")
+        return self.sum_participant_metric("produced_tokens")
 
     @property
     def total_missing_tokens(self):
-        return self._sum_participant_metric("missing_tokens")
+        return self.sum_participant_metric("missing_tokens")
 
     @property
     def total_remaining_tokens(self):
-        return self._sum_participant_metric("remaining_tokens")
+        return self.sum_participant_metric("remaining_tokens")
 
     @property
-    def fitness(self):
+    def generalization(self):
         if self.total_consumed_tokens == 0 and self.total_produced_tokens == 0:
             return 0.0
 
@@ -106,7 +102,7 @@ class ReplayLogResult:
     def local_calls(self):
         return self.network_metrics.get("local_calls", 0)
 
-    def _sum_participant_metric(self, metric_name):
+    def sum_participant_metric(self, metric_name):
         return sum(
             metrics.get(metric_name, 0)
             for metrics in self.participant_metrics.values()

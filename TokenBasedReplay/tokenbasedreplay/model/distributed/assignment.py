@@ -1,4 +1,4 @@
-"""Erzeugt Participants und Routing-Zuordnungen fuer verteiltes Replay."""
+from collections import deque
 
 from tokenbasedreplay.data.event_log import EventLog
 from tokenbasedreplay.model.participant.participant import Participant
@@ -10,62 +10,133 @@ class ParticipantAssignment:
     def __init__(self, discovered_model: DiscoveredPetriNet, training_log: EventLog):
         self.discovered_model = discovered_model
         self.training_log = training_log
-        self.participant_mapping = {}  # Mapping von Locations zu Participants
-        self.activity_to_participant = {}  # Mapping von Aktivität zu Participant-ID
-        self.place_to_participant = {}  # Mapping von Place zu besitzendem Participant
+        self.participant_mapping = {}  
+        self.activity_to_participant = {} 
+        self.place_to_participant = {}  
 
     def build(self):
-        # Baut Participants und gibt die Zuordnungen explizit zurück
-
         net_access = PetriNetAccess(self.discovered_model)
         transition_lookup = TransitionLookup(self.discovered_model.net)
 
-        for case_id, events in self.training_log.iter_traces():
+        for _, events in self.training_log.iter_traces():
             for event in events:
                 activity = event.activity
                 location = event.location
 
                 if location is None:
                     raise ValueError(f"Event {event} hat keine Participant-Location.")
-                # Suche nach Transition via Activity
+    
                 transition = transition_lookup.find_transition(activity)
                 if transition is not None:
-                    # Suche nach Participant via Location oder erzeuge neuen Participant
-                    participant = self._participant_for(location)
-                    # Füge dem Participant die Transition zu
-                    self._add_unique(participant.transitions, transition)
-                    # Füge dem Participant Input- und Output-Places hinzu
+                    participant = self.participant_for(location)
+                    self.add_unique(participant.transitions, transition)
                     for place in net_access.input_places(transition):
-                        self._assign_place(participant, place)
+                        self.assign_place(participant, place)
                     for place in net_access.output_places(transition):
-                        self._assign_place(participant, place)
-
-                    # Speicher Participant ab und mappe
+                        self.assign_place(participant, place)
                     self.participant_mapping[location] = participant
                     self.activity_to_participant[activity] = location
 
-        self._assign_initial_marking()
+        self.assign_silent_transitions(net_access, transition_lookup)
+        self.assign_unowned_places(net_access)
+        self.assign_initial_marking()
 
         return self.participant_mapping, self.activity_to_participant, self.place_to_participant
 
-    def _participant_for(self, participant_id):
+    def participant_for(self, participant_id):
         if participant_id not in self.participant_mapping:
             self.participant_mapping[participant_id] = Participant(participant_id)
         return self.participant_mapping[participant_id]
 
-    def _assign_place(self, participant, place):
-        self._add_unique(participant.places, place)
+    def assign_place(self, participant, place):
+        self.add_unique(participant.places, place)
         self.place_to_participant.setdefault(place, participant.participant_id)
 
-    def _assign_initial_marking(self):
+    def assign_silent_transitions(self, net_access, transition_lookup):
+        for transition in transition_lookup.silent_transitions():
+            participant = self.nearest_participant_for_transition(transition, net_access)
+            if participant is None:
+                continue
+
+            self.add_unique(participant.transitions, transition)
+            for place in net_access.input_places(transition):
+                if place not in self.place_to_participant:
+                    self.assign_place(participant, place)
+            for place in net_access.output_places(transition):
+                if place not in self.place_to_participant:
+                    self.assign_place(participant, place)
+
+    def assign_unowned_places(self, net_access):
+        for place in sorted(net_access.places(), key=lambda value: str(value.name)):
+            if place in self.place_to_participant:
+                continue
+            participant = self.nearest_participant_for_place(place)
+            if participant is not None:
+                self.assign_place(participant, place)
+
+    def nearest_participant_for_transition(self, transition, net_access):
+        input_candidate = self.nearest_participant_from_places(net_access.input_places(transition))
+        output_candidate = self.nearest_participant_from_places(net_access.output_places(transition))
+        return self.choose_candidate(input_candidate, output_candidate)
+
+    def nearest_participant_for_place(self, place):
+        candidate = self.nearest_participant_from_places([place])
+        if candidate is None:
+            return None
+        return candidate[1]
+
+    def nearest_participant_from_places(self, start_places):
+        queue = deque((place, 0) for place in start_places)
+        visited = set(start_places)
+        best = None
+
+        while queue:
+            node, distance = queue.popleft()
+            if node in self.place_to_participant:
+                participant_id = self.place_to_participant[node]
+                candidate = (distance, self.participant_mapping[participant_id])
+                if best is None or self.candidate_key(candidate) < self.candidate_key(best):
+                    best = candidate
+                continue
+
+            for neighbor in self.neighbors(node):
+                if neighbor in visited:
+                    continue
+                visited.add(neighbor)
+                queue.append((neighbor, distance + 1))
+
+        return best
+
+    def neighbors(self, node):
+        neighbors = []
+        for arc in getattr(node, "in_arcs", []):
+            neighbors.append(arc.source)
+        for arc in getattr(node, "out_arcs", []):
+            neighbors.append(arc.target)
+        return sorted(neighbors, key=lambda value: str(value.name))
+
+    def choose_candidate(self, input_candidate, output_candidate):
+        if input_candidate is None and output_candidate is None:
+            return None
+        if input_candidate is None:
+            return output_candidate[1]
+        if output_candidate is None:
+            return input_candidate[1]
+        if self.candidate_key(input_candidate) <= self.candidate_key(output_candidate):
+            return input_candidate[1]
+        return output_candidate[1]
+
+    def candidate_key(self, candidate):
+        distance, participant = candidate
+        return distance, str(participant.participant_id)
+
+    def assign_initial_marking(self):
         for place, amount in self.discovered_model.initial_marking.items():
             participant_id = self.place_to_participant.get(place)
             if participant_id is None:
                 continue
-            # Discovery is central, but the initial marking is copied to the
-            # owning participant so every online case can start reproducibly.
             self.participant_mapping[participant_id].set_initial_token(place, amount)
 
-    def _add_unique(self, values, value):
+    def add_unique(self, values, value):
         if value not in values:
             values.append(value)

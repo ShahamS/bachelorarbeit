@@ -1,8 +1,3 @@
-'''
-Jeder Participant hat eigene Markierung zur Bestimmung der 
-derzeitigen Tokenanzahl in den jeweiligen Places. Hierdurch 
-kann bestimmt werden, ob Tokens fehlen oder ob Tokens zur Verfügung stehen.
-'''
 class LocalMarking:
     def __init__(self):
         self.tokens = {}

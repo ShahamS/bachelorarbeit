@@ -1,5 +1,3 @@
-"""Online conformance checking."""
-
 from .checker import OnlineChecker
 from .result import ConformanceResult, EventCheckResult, TraceCheckResult
 

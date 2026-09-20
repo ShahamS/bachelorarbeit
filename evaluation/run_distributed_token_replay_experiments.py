@@ -1,5 +1,3 @@
-"""Fuehrt dezentrale Token-Replay-Experimente fuer mehrere Trainingssplits aus."""
-
 import argparse
 import csv
 import sys
@@ -12,16 +10,16 @@ TOKEN_REPLAY_ROOT = REPO_ROOT / "TokenBasedReplay"
 DEFAULT_DATASET = (
     REPO_ROOT
     / "datasets"
-    / "Road Traffic Fine Management Process_1_all"
-    / "Road_Traffic_Fine_Management_Process.xes"
-    / "Road_Traffic_Fine_Management_Process.xes"
+    / "artificial_log.xes"
+    #/ "Hospital_log.xes"
+    #/ "Hospital_log.xes"
 )
 DEFAULT_OUTPUT = (
     REPO_ROOT
     / "evaluation"
     / "results"
     / "token_replay"
-    / "distributed_traffic_training_splits.csv"
+    / "artificial_inductive_training_splits.csv"
 )
 
 
@@ -30,10 +28,7 @@ for import_path in (REPO_ROOT, TOKEN_REPLAY_ROOT):
         sys.path.insert(0, str(import_path))
 
 from TokenBasedReplay.tokenbasedreplay.data.splitter import EventLogSplitter
-from TokenBasedReplay.tokenbasedreplay.evaluation import (
-    evaluate_central_token_replay,
-    evaluate_distributed_token_replay,
-)
+from TokenBasedReplay.tokenbasedreplay.evaluation import evaluate_distributed_token_replay
 
 
 def parse_args():
@@ -74,11 +69,6 @@ def parse_args():
         type=float,
         default=None,
         help="Dependency Threshold fuer heuristics Discovery.",
-    )
-    parser.add_argument(
-        "--include-central",
-        action="store_true",
-        help="Schreibt zusaetzlich zentrale TBR-Zeilen fuer denselben Split.",
     )
     parser.add_argument(
         "--output",
@@ -141,25 +131,6 @@ def main():
                 summary=distributed_summary,
             )
         )
-
-        if args.include_central:
-            print(f"Running central Token Replay split={training_split}", flush=True)
-            central_summary = evaluate_central_token_replay(
-                training_log=training_log,
-                test_log=test_log,
-                discovery_algorithm=args.discovery_algorithm,
-                heuristic_threshold=args.heuristic_threshold,
-            )
-            rows.append(
-                _result_row(
-                    dataset_path=dataset_path,
-                    training_split=training_split,
-                    random_seed=args.random_seed,
-                    location_key=args.location_key,
-                    summary=central_summary,
-                )
-            )
-
     _write_rows(output_path, rows)
     print(f"Wrote {output_path}")
 
