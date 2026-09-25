@@ -10,16 +10,16 @@ TOKEN_REPLAY_ROOT = REPO_ROOT / "TokenBasedReplay"
 DEFAULT_DATASET = (
     REPO_ROOT
     / "datasets"
-    / "artificial_log.xes"
-    #/ "Hospital_log.xes"
-    #/ "Hospital_log.xes"
+    / "Sepsis Cases - Event Log_1_all"
+    / "Sepsis Cases - Event Log.xes"
+    / "Sepsis Cases - Event Log.xes"
 )
 DEFAULT_OUTPUT = (
     REPO_ROOT
     / "evaluation"
     / "results"
     / "token_replay"
-    / "artificial_inductive_training_splits.csv"
+    / "new_sepsis_inductive_training_splits.csv"
 )
 
 
@@ -55,7 +55,7 @@ def parse_args():
         "--training-splits",
         nargs="+",
         type=float,
-        default=[0.2, 0.4, 0.6, 0.8],
+        default=[0.01, 0.05, 0.1, 0.2],
         help="Liste von Trainingsanteilen, z.B. 0.2 0.4 0.6 0.8.",
     )
     parser.add_argument(

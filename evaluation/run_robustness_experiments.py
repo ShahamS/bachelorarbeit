@@ -13,12 +13,12 @@ TOKEN_REPLAY_ROOT = REPO_ROOT / "TokenBasedReplay"
 DEFAULT_DATASET = (
     REPO_ROOT
     / "datasets"
-    / "artificial_log.xes"
-    #/ "Hospital_log.xes"
-    #/ "Hospital_log.xes"
+    / "Real-life event logs - Hospital log_1_all"
+    / "Hospital_log.xes"
+    / "Hospital_log.xes"
 )
 
-DEFAULT_OUTPUT = REPO_ROOT / "evaluation" / "results" / "robustness" / "artificial_inductive_robustness_experiments.csv"
+DEFAULT_OUTPUT = REPO_ROOT / "evaluation" / "results" / "robustness" / "new_hospital_heuristics_robustness_experiments.csv"
 
 
 for import_path in (REPO_ROOT, CHECKMYFLOW_ROOT, TOKEN_REPLAY_ROOT):
@@ -91,7 +91,7 @@ def parse_args():
         "--training-splits",
         nargs="+",
         type=float,
-        default=[0.2, 0.4, 0.6, 0.8],
+        default=[0.01, 0.05, 0.075, 0.1],
         help="Trainingsanteile auf Trace-Ebene.",
     )
     parser.add_argument(

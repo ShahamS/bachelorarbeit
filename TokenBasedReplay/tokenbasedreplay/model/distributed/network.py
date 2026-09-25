@@ -77,6 +77,9 @@ class NetworkSimulator:
         if owner is None:
             return False
 
+        if owner_id != requesting_participant_id:
+            self.remote_calls += 1
+
         owner.produce_token(place_id, case_id)
         return True
 
